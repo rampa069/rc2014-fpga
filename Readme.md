@@ -9,6 +9,9 @@ The RC2014 FPGA system is designed to emulate the classic RC2014 computer archit
 - 512K RAM (Fixed): A fixed 512KB RAM module is integrated into the system, providing sufficient memory for program execution and data storage.
 - 512K ROM (Fixed): A fixed 512KB ROM module is included to store the system's firmware and user programs.
 - Z2 Memory paging
+## SD disk
+- Real SD card (with FAT partition after the CPM slides)
+- Disk images loaded thru OSD
 ## Communication Interfaces
 - 2 x ACIA 6850B (Internal): Two ACIA 6850B modules are integrated for asynchronous communication. These modules can be disconnected, allowing for flexibility in the configuration.
 
