@@ -180,7 +180,7 @@ assign {N41,N42,N43,N44,N45,N46,N47,N48,USER1,USER2,USER3,USER5,USER6,USER7}=0;
 localparam CONF_STR = {
 	"RC2014;;",
 	"F0,ROM,Load ROM;",
-	"S1U,IMG,Load Disk;",
+	"S0U,IMGVHD,Load Disk;",
 	`SEP
 	"P1,Boot Switches;",
 	"P1O13,Slice,0,1,2,3,4,5,6,7;",
@@ -189,6 +189,10 @@ localparam CONF_STR = {
 	"P1O6,Boot,Menu,Auto;",
 	"P1O7,Console,Primary,Secondary;",
 	"P1O8,Device,Serial,CRT;",
+	`SEP
+	"P1T0,Reset;",
+	"P2,Internal hardware;",
+	"P2O9,AY-3-8910,External,Internal;",
 	`SEP
 	"OFG,Scandoubler Fx,None,CRT 25%,CRT 50%,CRT 75%;",
 	"T0,Reset;",
@@ -199,7 +203,7 @@ localparam CONF_STR = {
 wire clk_sys;
 wire clk_vt;
 wire clk_7;
-wire clk_uart;
+wire clk_psg;
 wire locked;
 
 pll pll
@@ -208,18 +212,29 @@ pll pll
 	.c0(clk_sys),
 	.c1(clk_vt),
 	.c2(clk_7),
-	.c3(clk_uart),
+	.c3(clk_psg),
 	.locked(locked)
 );
 
-//pll_video pll_video
-//(
-//   .inclk0(CLOCK_50),
-//	.c0(clk_video),
-//	.c1(clk_sys)
-//	//.c2(clk_ram),
-//	//.locked(locked)
-//);
+reg ne14M;
+reg ne7M3, pe7M3;
+reg ne3M6, pe3M6;
+reg ne1M8, pe1M8;
+reg ne921K, pe921K;
+
+reg[5:0] ce = 1;
+always @(negedge clk_sys) if(!reset) begin
+	ce <= ce+1'd1;
+	ne14M <= ~ce[0] & ~ce[1];
+	ne7M3 <= ~ce[0] & ~ce[1] & ~ce[2];
+	pe7M3 <= ~ce[0] & ~ce[1] &  ce[2];
+	ne3M6 <= ~ce[0] & ~ce[1] & ~ce[2] & ~ce[3];
+	pe3M6 <= ~ce[0] & ~ce[1] & ~ce[2] &  ce[3];
+	ne1M8 <= ~ce[0] & ~ce[1] & ~ce[2] & ~ce[3] & ~ce[4] ;
+	pe1M8 <= ~ce[0] & ~ce[1] & ~ce[2] & ~ce[3] &  ce[4];
+	ne921K <= ~ce[0] & ~ce[1] & ~ce[2] & ~ce[3] & ~ce[4] & ~ce[5];
+	pe921K <= ~ce[0] & ~ce[1] & ~ce[2] & ~ce[3] & ~ce[4] &  ce[5];
+end
 
 //////////////////   MIST ARM I/O   ///////////////////
 wire  [7:0] joystick_0;
@@ -233,15 +248,15 @@ wire        no_csync;
 wire [63:0] status;
 
 wire [31:0] sd_lba;
-wire  [1:0] sd_rd;
-wire  [1:0] sd_wr;
+wire  sd_rd;
+wire  sd_wr;
 
 wire        sd_ack;
 wire  [8:0] sd_buff_addr;
 wire  [7:0] sd_buff_dout;
 wire  [7:0] sd_buff_din;
 wire        sd_buff_wr;
-wire  [1:0] img_mounted;
+wire        img_mounted;
 wire [63:0] img_size;
 
 wire        sd_ack_conf;
@@ -345,12 +360,12 @@ sd_card sd_card (
 	.sd_conf         ( sd_conf        ),
 	.sd_ack_conf     ( sd_ack_conf    ),
 	.sd_sdhc         ( sd_sdhc        ),
+	.allow_sdhc      (1'b1            ),
 	.sd_buff_dout    ( sd_buff_dout   ),
 	.sd_buff_wr      ( sd_buff_wr     ),
 	.sd_buff_din     ( sd_buff_din    ),
 	.sd_buff_addr    ( sd_buff_addr   ),
 
-	.allow_sdhc 	( sd_sdhc            ),   
    .img_mounted   (img_mounted),
 	.img_size      (img_size),
 	// connection to local CPU
@@ -383,7 +398,6 @@ wire ps2k_c,ps2k_d;
       .testf (1'b0),
       .vga_cursor_block (1'b1),
       .vga_cursor_blink (1'b1),
-//      .vga_debug => (vga_debug),
       .have_act_seconds(0),
       .vga_bl (),
 
@@ -400,31 +414,49 @@ wire ps2k_c,ps2k_d;
 
 
 
-wire nINT,nBUSRQ,nM1,nMREQ,nIORQ,nRD,nWR,nRFSH,nBUSACK,nNMI;
+wire nM1,nMREQ,nIORQ,nRD,nWR,nRFSH,nBUSACK;
 wire [15:0] cpu_a;
 wire [7:0]  cpu_din;
 wire [7:0]  cpu_dout;
 
+//////////////////////
+wand nINT;
+assign nINT=uart1_nINT;
+assign nINT=uart2_nINT;
+assign nINT=ctc_nINT;
+//assign nINT=nTimer;
 
-assign nINT= uart1_nINT & uart2_nINT & ctc_nINT;
+//////////////////////
+wand nBUSRQ=1'b1;
+//////////////////////
+wand nNMI=1'b1;
+//////////////////////
+wand nWAIT=1'b1;
+//////////////////////
+wand nHALT;
 
-T80s cpu
+T80pa cpu
 (
 	.RESET_n(~reset),
-	.CLK(~clk_7),
-	.CEN(1'b1),
-	.WAIT_n(1'b1),
+	//.CLK_n(clk_7),
+
+	.CLK(clk_sys),
+	.CEN_n(ne7M3),
+	.CEN_p(pe7M3),
+	
+	.WAIT_n(nWAIT),
 	.INT_n(nINT),
 	.NMI_n(nNMI),
-	.BUSRQ_n(1'b1),
+	.BUSRQ_n(nBUSRQ),
 	.M1_n(nM1),
 	.MREQ_n(nMREQ),
 	.IORQ_n(nIORQ),
 	.RD_n(nRD),
 	.WR_n(nWR),
 	.RFSH_n(nRFSH),
-	.HALT_n(1),
+	.HALT_n(nHALT),
 	.BUSAK_n(nBUSACK),
+	.OUT0   (1'b0   ),
 	.A(cpu_a),
 	.DO(cpu_dout),
 	.DI(cpu_din)
@@ -434,7 +466,8 @@ wire UART1_CS = cpu_a[7:1] == 7'b1000000 && !nIORQ ;
 wire UART2_CS = cpu_a[7:1] == 7'b0100000 && !nIORQ ;
 wire LED_CS   = cpu_a[7:0] == 8'h00      && !nIORQ ;
 wire CTC_CS   = cpu_a[7:2] == 6'b100010  && !nIORQ;
-wire PSG_CS   = cpu_a[7:2] == 6'b101000 && !nIORQ;
+wire PSG_CS   = cpu_a[7:2] == 6'b101000  && !nIORQ;
+wire SD_CS    = cpu_a[7:0] == 8'h69      && !nIORQ ;
 
 wire MEM_nRD = nRD | nMREQ;
 wire MEM_nWR = nWR | nMREQ;
@@ -448,10 +481,12 @@ assign mem_we = !MEM_nWR ;
 assign cpu_din = LED_CS  ? status[8:1]:
                  UART1_CS ? UART1_D :
                  UART2_CS ? UART2_D :
-					  CTC_CS  ? ctc_dout:
-					  PSG_CS   ? PSG_D:
-					  mem_rd  ? mem_q:
-					  8'hff;
+					  CTC_CS   ? ctc_dout:
+					  PSG_CS   ? status[9]? PSG_D: BUS_D:
+					  SD_CS    ? {sd_miso,7'b0}:
+					  mem_rd   ? mem_q:
+					  BUS_D;
+					  //8'hff;
 
 assign mem_d = mem_we ? cpu_dout : 8'bZZZZZZZZ;
 
@@ -471,8 +506,8 @@ acia6850 uart1
 			.data_out (UART1_D),         // Data Bus Out
 			.irq      (uart1_nINT),      // Interrupt Request out.
 
-			.RxC      (~clk_7),          // Receive Baud Clock
-			.TxC      (~clk_7),          // Transmit Baud Clock
+			.RxC      (ne7M3),          // Receive Baud Clock
+			.TxC      (ne7M3),          // Transmit Baud Clock
 			.RxD      (rxrx),           // Receive Data
 			.TxD      (txtx),           // Transmit Data
 			.DCD_n    (1'b0),           // Data Carrier Detect
@@ -491,8 +526,8 @@ acia6850 uart2
 			.data_out (UART2_D),         // Data Bus Out
 			.irq      (uart2_nINT),      // Interrupt Request out.
 
-			.RxC      (~clk_7),          // Receive Baud Clock
-			.TxC      (~clk_7),          // Transmit Baud Clock
+			.RxC      (ne7M3),          // Receive Baud Clock
+			.TxC      (ne7M3),          // Transmit Baud Clock
 			.RxD      ( ),           // Receive Data
 			.TxD      ( ),           // Transmit Data
 			.DCD_n    (1'b0),           // Data Carrier Detect
@@ -505,23 +540,14 @@ acia6850 uart2
 wire [7:0] ctc_dout;
 wire ctc_counter_0_to;
 wire ctc_counter_1_to;
+wire ctc_counter_2_to;
 wire ctc_nINT;
 
-reg ne7M0, pe7M0,ne3M5,pe3M5;
-reg[3:0] ce = 1;
-always @(negedge clk_sys) if(!reset) begin
-	ce <= ce+1'd1;
-	ne7M0 <= ~ce[0] & ~ce[1] & ~ce[2];
-	pe7M0 <= ~ce[0] & ~ce[1] &  ce[2];
-	ne3M5 <= ~ce[0] & ~ce[1] & ~ce[2] & ~ce[3];
-	pe3M5 <= ~ce[0] & ~ce[1] & ~ce[2] &  ce[3];
-
-end
 		
 z80ctc_top z80ctc
 (
 	.clock(clk_sys),
-	.clock_ena(pe7M0),
+	.clock_ena(clk_7),
 	.reset(reset),
 	.din(cpu_dout),
 	.cpu_din(cpu_din),
@@ -532,13 +558,13 @@ z80ctc_top z80ctc
 	.iorq_n(nIORQ),
 	.rd_n(nRD),
 	.int_n(ctc_nINT),
-	.trg0(ne7M0),
+	.trg0(pe921K),
 	.to0(ctc_counter_0_to),
-	.trg1(ne7M0),
+	.trg1(pe921K),
 	.to1(ctc_counter_1_to),
-	.trg2(ne7M0),
-	.to2(nNMI),
-	.trg3(ne7M0)
+	.trg2(pe921K),
+	.to2(ctc_counter_2_to),
+	.trg3(ctc_counter_2_to)
 );
 
 wire [7:0] PSG_D;
@@ -546,13 +572,14 @@ wire [11:0] a,b,c;
 wire [7:0] io;
 wire bc1   = PSG_CS  && !cpu_a[0];
 wire bdir  = PSG_CS  && !cpu_a[1];
+
 wire [15:0] audio = {a+b+c,2'b0};
 
 psg ay8910
 (
 	.clock  (clk_sys),
 	.sel    (1'b0   ),
-	.ce     (pe3M5  ),
+	.ce     (pe3M6  ),
 	.reset  (~reset ),
 	.bdir   (bdir   ),
 	.bc1    (bc1    ),
@@ -563,6 +590,21 @@ psg ay8910
 	.c      (c      ),
 	.ioad   (io     )
 );
+//////////////////// INTERRUPT 50Hz /////////////////
+reg [18:0] counter;
+wire nTimer;
+always @(posedge clk_psg) begin
+  counter <= counter + 1;
+  if (counter == 18431) begin
+    nTimer <= 0;
+  end 
+  
+  if (nTimer) begin // interrupt acknowledge
+    if ( !nIORQ && !nM1) begin
+			nTimer <= 1;
+	 end 
+  end 
+end
 ////////////////////   RAM/ROM   ///////////////////
 
 wire[19:0] mem_a;
@@ -577,7 +619,7 @@ wire mem_ready;
 wire [7:0] PAGSEL0,PAGSEL1,PAGSEL2,PAGSEL3;
 wire nPage;
 
-always @(posedge clk_7) begin
+always @(posedge clk_sys) begin
 	if(reset) begin
 		PAGSEL0 <= 8'h00;
 		PAGSEL1 <= 8'h01;
@@ -589,6 +631,11 @@ always @(posedge clk_7) begin
 	 if (!IO_nWR)
 		case (cpu_a[7:0])
 			8'h00: DEBUG <= cpu_dout;
+			8'h69: begin
+			          sd_mosi <=cpu_dout[0];
+						 sd_clk  <=cpu_dout[4];
+						 sd_cs   <=cpu_dout[3];
+					 end
 			8'h78: PAGSEL0 <= cpu_dout;
 			8'h79: PAGSEL1 <= cpu_dout;
 			8'h7a: PAGSEL2 <= cpu_dout;
@@ -598,7 +645,7 @@ always @(posedge clk_7) begin
 	end
 end
 
-always @(posedge clk_7) begin
+always @(posedge clk_sys) begin
   case (cpu_a[15:14])
     2'b00 : mem_a <= nPage?{PAGSEL0[5:0],cpu_a[13:0]} : {6'b0,cpu_a[13:0]};
     2'b01 : mem_a <= nPage?{PAGSEL1[5:0],cpu_a[13:0]} : {6'b0,cpu_a[13:0]};
@@ -676,8 +723,8 @@ mist_video #(.COLOR_DEPTH(4), .OUT_COLOR_DEPTH(VGA_BITS), .BIG_OSD(BIG_OSD)) mis
 	.G           ( Gx ),
 	.B           ( Bx ),
 
-	.HSync       ( HSync      ),
-	.VSync       ( VSync      ),
+	.HSync       ( ~HSync      ),
+	.VSync       ( ~VSync      ),
 
 	// MiST video output signals
 	.VGA_R       ( VGA_R      ),
@@ -690,12 +737,34 @@ mist_video #(.COLOR_DEPTH(4), .OUT_COLOR_DEPTH(VGA_BITS), .BIG_OSD(BIG_OSD)) mis
 // External BUS
 
 wire [7:0] DEBUG;
-assign BUS_A[15:0] = cpu_a;
-assign BUS_A[23:16] = DEBUG;
-assign BUS_D = cpu_dout;
-assign BUS_nRESET=~reset;
-assign BUS_CLK=clk_7;
-assign LED= ~ctc_counter_0_to;
+
+assign LED= sd_cs;
+
+always @(posedge clk_sys) begin
+	if(reset) begin
+		BUS_A<=16'hffff;
+		BUS_D<=8'hff;
+		BUS_nMREQ <=1;
+      BUS_nIORQ <=1;
+      BUS_nRD   <=1;
+      BUS_nWR   <=1;
+		BUS_nM1   <=1;
+   end else begin
+	   BUS_A[15:0]  <= cpu_a;
+		BUS_A[23:16] <= DEBUG;
+	   BUS_D <= !nWR? cpu_dout : 8'bZ;
+	   BUS_nMREQ <= nMREQ;
+	   BUS_nIORQ <= nIORQ;
+	   BUS_nRD <= nRD;
+	   BUS_nWR <= nWR;
+		BUS_nRFSH <= nRFSH;
+		BUS_nBUSAK <= nBUSACK;
+		BUS_nHALT <= nHALT;
+		BUS_nM1 <= nM1;
+		BUS_CLK <= clk_7;
+	end
+   BUS_nRESET <= ~reset;
+end
 
 
 endmodule
