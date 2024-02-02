@@ -436,7 +436,7 @@ begin
 		end if;
 	end process;
 
-	irq <= StatReg(7);
+	irq <= not StatReg(7);
 
 	---------------------------------------------------------------
 	-- Data Carrier Detect Edge rising edge detect

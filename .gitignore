@@ -1,0 +1,10 @@
+*~
+output_files/
+db/
+incremental_db/
+greybox_tmp/
+qmegawiz_errors_log.txt
+*.bak
+*.ppf
+*.qws
+*.cmp

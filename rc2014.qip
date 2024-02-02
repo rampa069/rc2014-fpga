@@ -1,0 +1,8 @@
+set_global_assignment -name SYSTEMVERILOG_FILE [file join $::quartus(qip_path) rc2014.sv]
+set_global_assignment -name SYSTEMVERILOG_FILE [file join $::quartus(qip_path) rtl/sdram.sv]
+set_global_assignment -name VERILOG_FILE [file join $::quartus(qip_path) rtl/psg.v]
+set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) rtl/acia6850.vhd]
+set_global_assignment -name QIP_FILE [file join $::quartus(qip_path) rtl/z80ctc/z80ctc.qip]
+set_global_assignment -name QIP_FILE [file join $::quartus(qip_path) mist-modules/mist.qip]
+set_global_assignment -name QIP_FILE [file join $::quartus(qip_path) T80/T80.qip]
+set_global_assignment -name QIP_FILE [file join $::quartus(qip_path) vt105/vt105.qip]

@@ -1,5 +1,5 @@
 //
-// RC2014, ACIA, 7.37280000
+// RC2014, ACIA, 7.37280000 MHZ 
 //
 
 `default_nettype none
@@ -86,9 +86,8 @@ module rc2014
 `ifdef USE_AUDIO_IN
 	input         AUDIO_IN,
 `endif
-	input         UART_RX,
-	output        UART_TX,
 	
+`ifdef USE_EXTBUS	
 	output [23:0]  BUS_A = 24'b0,
 	inout  [15:0]  BUS_D = 16'b0,
 	inout          USER1,
@@ -114,8 +113,10 @@ module rc2014
 	output         BUS_nRFSH,
 	output         BUS_nHALT,
 	output         BUS_nBUSAK,
-	output reg     BUS_CLK
-	
+	output reg     BUS_CLK,
+`endif
+   input         UART_RX,
+	output        UART_TX
 );
 
 `ifdef NO_DIRECT_UPLOAD
@@ -172,9 +173,9 @@ assign SDRAM2_nWE = 1;
 
 `default_nettype none
 
-//assign LED = ~(ioctl_download );
+`ifdef USE_EXTBUS	
 assign {N41,N42,N43,N44,N45,N46,N47,N48,USER1,USER2,USER3,USER5,USER6,USER7}=0;
-
+`endif
 
 `include "build_id.v"
 localparam CONF_STR = {
@@ -191,8 +192,14 @@ localparam CONF_STR = {
 	"P1O8,Device,Serial,CRT;",
 	`SEP
 	"P1T0,Reset;",
-	"P2,Internal hardware;",
+`ifdef USE_EXTBUS	
+	"P2,Hardware options;",	
 	"P2O9,AY-3-8910,External,Internal;",
+	"P2OA,2nd ACIA,External,Internal;",
+	"P2OB,Z80 CTC,External,Internal;",	
+	`SEP
+	"P2T0,Reset;",
+`endif
 	`SEP
 	"OFG,Scandoubler Fx,None,CRT 25%,CRT 50%,CRT 75%;",
 	"T0,Reset;",
@@ -203,18 +210,39 @@ localparam CONF_STR = {
 wire clk_sys;
 wire clk_vt;
 wire clk_7;
-wire clk_psg;
 wire locked;
 
+
+`ifdef USE_CLOCK_50
 pll pll
 (
    .inclk0(CLOCK_50),
 	.c0(clk_sys),
 	.c1(clk_vt),
 	.c2(clk_7),
-	.c3(clk_psg),
 	.locked(locked)
 );
+`else
+pll pll
+(
+   .inclk0(CLOCK_27),
+	.c0(clk_sys),
+	.c1(clk_vt),
+	.c2(clk_7),
+	.locked(locked)
+);
+
+wire clk_50;
+pll1 pll1
+(
+   .inclk0(CLOCK_27),
+	.c0(clk_50),
+);
+
+`endif	
+
+
+
 
 reg ne14M;
 reg ne7M3, pe7M3;
@@ -405,15 +433,28 @@ wire ps2k_c,ps2k_d;
 		.bps(115200),
 
       .cpuclk (clk_vt),
+`ifdef USE_CLOCK_50		
       .clk50mhz (CLOCK_50),
+`else
+      .clk50mhz (clk_50),
+`endif		
       .reset (reset)
    );
 
 
 ////////////////////   COMPUTER   ///////////////////
 
-
-
+//////////// Internal devices //////////////
+`ifdef USE_EXTBUS
+wire psgInt        = status[9];
+wire aciaInt       = status[10];
+wire ctcInt        = status[11];
+`else
+wire psgInt        = 1'b1;
+wire aciaInt       = 1'b1;
+wire ctcInt        = 1'b1;
+`endif
+////////////////////////////////////////////
 wire nM1,nMREQ,nIORQ,nRD,nWR,nRFSH,nBUSACK;
 wire [15:0] cpu_a;
 wire [7:0]  cpu_din;
@@ -421,10 +462,10 @@ wire [7:0]  cpu_dout;
 
 //////////////////////
 wand nINT;
-assign nINT=uart1_nINT;
-assign nINT=uart2_nINT;
-assign nINT=ctc_nINT;
-//assign nINT=nTimer;
+assign nINT=1'b1;
+assign nINT= uart1_nINT;
+assign nINT= aciaInt? UART2_CS ? uart2_nINT : 1'b1 :1'b1;
+assign nINT= ctcInt?  ctc_nINT    : 1'b1;
 
 //////////////////////
 wand nBUSRQ=1'b1;
@@ -438,7 +479,6 @@ wand nHALT;
 T80pa cpu
 (
 	.RESET_n(~reset),
-	//.CLK_n(clk_7),
 
 	.CLK(clk_sys),
 	.CEN_n(ne7M3),
@@ -462,12 +502,12 @@ T80pa cpu
 	.DI(cpu_din)
 );
 
-wire UART1_CS = cpu_a[7:1] == 7'b1000000 && !nIORQ ;
-wire UART2_CS = cpu_a[7:1] == 7'b0100000 && !nIORQ ;
-wire LED_CS   = cpu_a[7:0] == 8'h00      && !nIORQ ;
-wire CTC_CS   = cpu_a[7:2] == 6'b100010  && !nIORQ;
-wire PSG_CS   = cpu_a[7:2] == 6'b101000  && !nIORQ;
-wire SD_CS    = cpu_a[7:0] == 8'h69      && !nIORQ ;
+wire UART1_CS = cpu_a[7:1] == 7'b1000000 && !nIORQ && nM1;
+wire UART2_CS = cpu_a[7:1] == 7'b0100000 && !nIORQ && nM1;
+wire LED_CS   = cpu_a[7:0] == 8'h00      && !nIORQ && nM1;
+wire CTC_CS   = cpu_a[7:2] == 6'b100010  && !nIORQ && nM1;
+wire PSG_CS   = cpu_a[7:2] == 6'b101000  && !nIORQ && nM1;
+wire SD_CS    = cpu_a[7:0] == 8'h69      && !nIORQ && nM1;
 
 wire MEM_nRD = nRD | nMREQ;
 wire MEM_nWR = nWR | nMREQ;
@@ -480,14 +520,28 @@ assign mem_we = !MEM_nWR ;
 
 assign cpu_din = LED_CS  ? status[8:1]:
                  UART1_CS ? UART1_D :
-                 UART2_CS ? UART2_D :
-					  CTC_CS   ? ctc_dout:
-					  PSG_CS   ? status[9]? PSG_D: BUS_D:
+`ifdef USE_EXTBUS					  
+                 UART2_CS ? aciaInt?UART2_D : BUS_D:
+`else
+					  UART2_CS ? UART2_D :
+`endif					  
+`ifdef USE_EXTBUS					  
+					  CTC_CS   ? ctcInt? ctc_dout: BUS_D: 
+`else
+					  CTC_CS   ? ctc_dout : 
+`endif					  
+`ifdef USE_EXTBUS					  
+					  PSG_CS   ? psgInt? PSG_D   : BUS_D:
+`else
+					  PSG_CS   ? PSG_D   : 
+`endif					  
 					  SD_CS    ? {sd_miso,7'b0}:
 					  mem_rd   ? mem_q:
+`ifdef USE_EXTBUS					  
 					  BUS_D;
-					  //8'hff;
-
+`else					  
+					  8'hff;
+`endif
 assign mem_d = mem_we ? cpu_dout : 8'bZZZZZZZZ;
 
 wire [7:0] UART1_D;
@@ -499,19 +553,19 @@ acia6850 uart1
 (
 			.clk      (clk_sys),        // System Clock
 			.rst      (reset),          // Reset input (active high)
-			.cs       (UART1_CS) ,       // miniUART Chip Select
+			.cs       (UART1_CS) ,      // miniUART Chip Select
 			.addr     (cpu_a[0]),       // Register Select
 			.rw       (nWR),            // Read / Not Write  1 - Read, 0 - Write
 			.data_in  (cpu_dout),       // Data Bus In 
-			.data_out (UART1_D),         // Data Bus Out
-			.irq      (uart1_nINT),      // Interrupt Request out.
+			.data_out (UART1_D),        // Data Bus Out
+			.irq      (uart1_nINT),     // Interrupt Request out.
 
 			.RxC      (ne7M3),          // Receive Baud Clock
 			.TxC      (ne7M3),          // Transmit Baud Clock
 			.RxD      (rxrx),           // Receive Data
 			.TxD      (txtx),           // Transmit Data
 			.DCD_n    (1'b0),           // Data Carrier Detect
-			.CTS_n    (1'b0),         // Clear To Send
+			.CTS_n    (1'b0),           // Clear To Send
 			.RTS_n    (rtsrts)          // Request To send
 		);
 
@@ -528,11 +582,11 @@ acia6850 uart2
 
 			.RxC      (ne7M3),          // Receive Baud Clock
 			.TxC      (ne7M3),          // Transmit Baud Clock
-			.RxD      ( ),           // Receive Data
-			.TxD      ( ),           // Transmit Data
+			.RxD      (UART_RX ),           // Receive Data
+			.TxD      (UART_TX ),           // Transmit Data
 			.DCD_n    (1'b0),           // Data Carrier Detect
-			.CTS_n    (1'b0),         // Clear To Send
-			.RTS_n    (rtsrts)          // Request To send
+			.CTS_n    (1'b0),           // Clear To Send
+			.RTS_n    ()                // Request To send
 		);
 
 
@@ -568,43 +622,27 @@ z80ctc_top z80ctc
 );
 
 wire [7:0] PSG_D;
-wire [11:0] a,b,c;
+wire [14:0] mix;
 wire [7:0] io;
-wire bc1   = PSG_CS  && !cpu_a[0];
-wire bdir  = PSG_CS  && !cpu_a[1];
+wire bc1   = psgInt? PSG_CS  && !cpu_a[0] : 1'bZ;
+wire bdir  = psgInt? PSG_CS  && !cpu_a[1] : 1'bZ;
 
-wire [15:0] audio = {a+b+c,2'b0};
+wire [15:0] audio = {mix,1'b0};
 
 psg ay8910
 (
 	.clock  (clk_sys),
-	.sel    (1'b0   ),
-	.ce     (pe3M6  ),
+	.sel    (1'b1   ),
+	.ce     (pe1M8  ),
 	.reset  (~reset ),
 	.bdir   (bdir   ),
 	.bc1    (bc1    ),
-	.d      (cpu_dout),
+	.d      (psgInt ? cpu_dout: 8'bZZZZZZZZ),
 	.q      (PSG_D   ),
-	.a      (a      ),
-	.b      (b      ),
-	.c      (c      ),
+	.mix    (mix    ),
 	.ioad   (io     )
 );
-//////////////////// INTERRUPT 50Hz /////////////////
-reg [18:0] counter;
-wire nTimer;
-always @(posedge clk_psg) begin
-  counter <= counter + 1;
-  if (counter == 18431) begin
-    nTimer <= 0;
-  end 
-  
-  if (nTimer) begin // interrupt acknowledge
-    if ( !nIORQ && !nM1) begin
-			nTimer <= 1;
-	 end 
-  end 
-end
+
 ////////////////////   RAM/ROM   ///////////////////
 
 wire[19:0] mem_a;
@@ -701,8 +739,11 @@ assign Gx= vga_fb ? 4'b1111 : vga_ht? 4'b1000: 4'b0000;
 assign Bx=4'b0;
 
 mist_video #(.COLOR_DEPTH(4), .OUT_COLOR_DEPTH(VGA_BITS), .BIG_OSD(BIG_OSD)) mist_video (
-	.clk_sys     ( CLOCK_50   ),
-
+`ifdef USE_CLOCK_50		
+      .clk_sys (CLOCK_50),
+`else
+      .clk_sys (clk_50),
+`endif		
 	// OSD SPI interface
 	.SPI_SCK     ( SPI_SCK    ),
 	.SPI_SS3     ( SPI_SS3    ),
@@ -739,7 +780,7 @@ mist_video #(.COLOR_DEPTH(4), .OUT_COLOR_DEPTH(VGA_BITS), .BIG_OSD(BIG_OSD)) mis
 wire [7:0] DEBUG;
 
 assign LED= sd_cs;
-
+`ifdef USE_EXTBUS
 always @(posedge clk_sys) begin
 	if(reset) begin
 		BUS_A<=16'hffff;
@@ -766,5 +807,5 @@ always @(posedge clk_sys) begin
    BUS_nRESET <= ~reset;
 end
 
-
+`endif
 endmodule
