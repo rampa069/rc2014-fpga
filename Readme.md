@@ -11,6 +11,8 @@ The RC2014 FPGA system is designed to emulate the classic RC2014 computer archit
 - Z2 Memory paging
 ## Communication Interfaces
 - 2 x ACIA 6850B (Internal): Two ACIA 6850B modules are integrated for asynchronous communication. These modules can be disconnected, allowing for flexibility in the configuration.
+
+## Timer source
 - 1 x Z80CTC (Internal/Disconnectable): The Z80CTC (Counter/Timer) module is included, providing timing and event generation capabilities. It can be disconnected for configuration flexibility.
 
 ## Sound Interface
