@@ -232,11 +232,11 @@ pll pll
 	.locked(locked)
 );
 
-wire clk_50;
+wire CLOCK_50;
 pll1 pll1
 (
    .inclk0(CLOCK_27),
-	.c0(clk_50),
+	.c0(CLOCK_50),
 );
 
 `endif	
@@ -433,11 +433,7 @@ wire ps2k_c,ps2k_d;
 		.bps(115200),
 
       .cpuclk (clk_vt),
-`ifdef USE_CLOCK_50		
-      .clk50mhz (CLOCK_50),
-`else
-      .clk50mhz (clk_50),
-`endif		
+	   .clk50mhz (CLOCK_50),
       .reset (reset)
    );
 
@@ -453,6 +449,7 @@ wire ctcInt        = status[11];
 wire psgInt        = 1'b1;
 wire aciaInt       = 1'b1;
 wire ctcInt        = 1'b1;
+wire [7:0] BUS_D   = 8'hff;
 `endif
 ////////////////////////////////////////////
 wire nM1,nMREQ,nIORQ,nRD,nWR,nRFSH,nBUSACK;
@@ -519,29 +516,14 @@ assign mem_we = !MEM_nWR ;
 
 
 assign cpu_din = LED_CS  ? status[8:1]:
-                 UART1_CS ? UART1_D :
-`ifdef USE_EXTBUS					  
+                 UART1_CS ? UART1_D :				  
                  UART2_CS ? aciaInt?UART2_D : BUS_D:
-`else
-					  UART2_CS ? UART2_D :
-`endif					  
-`ifdef USE_EXTBUS					  
 					  CTC_CS   ? ctcInt? ctc_dout: BUS_D: 
-`else
-					  CTC_CS   ? ctc_dout : 
-`endif					  
-`ifdef USE_EXTBUS					  
 					  PSG_CS   ? psgInt? PSG_D   : BUS_D:
-`else
-					  PSG_CS   ? PSG_D   : 
-`endif					  
 					  SD_CS    ? {sd_miso,7'b0}:
 					  mem_rd   ? mem_q:
-`ifdef USE_EXTBUS					  
 					  BUS_D;
-`else					  
-					  8'hff;
-`endif
+
 assign mem_d = mem_we ? cpu_dout : 8'bZZZZZZZZ;
 
 wire [7:0] UART1_D;
@@ -718,7 +700,7 @@ wire [15:0] audiomix;
 i2s i2s (
 	.reset(1'b0),
 	.clk(clk_sys),
-	.clk_rate(32'd58_000_000),
+	.clk_rate(32'd58_982_400),
 
 	.sclk(I2S_BCK),
 	.lrclk(I2S_LRCK),
@@ -728,6 +710,24 @@ i2s i2s (
 	.right_chan({~audio[15],audio[14:0]})
 );
 `endif
+
+dac #(
+   .c_bits      (16))
+audiodac_l(
+   .clk_i       (clk_sys ),
+   .res_n_i     (1      ),
+   .dac_i       (audio),
+   .dac_o       (AUDIO_L)
+  );
+
+dac #(
+   .c_bits      (16))
+audiodac_r(
+   .clk_i       (clk_sys ),
+   .res_n_i     (1      ),
+   .dac_i       (audio),
+   .dac_o       (AUDIO_R)
+  );
 
 ////////////////////   VIDEO   ///////////////////
 
@@ -739,11 +739,8 @@ assign Gx= vga_fb ? 4'b1111 : vga_ht? 4'b1000: 4'b0000;
 assign Bx=4'b0;
 
 mist_video #(.COLOR_DEPTH(4), .OUT_COLOR_DEPTH(VGA_BITS), .BIG_OSD(BIG_OSD)) mist_video (
-`ifdef USE_CLOCK_50		
-      .clk_sys (CLOCK_50),
-`else
-      .clk_sys (clk_50),
-`endif		
+	
+   .clk_sys (CLOCK_50),
 	// OSD SPI interface
 	.SPI_SCK     ( SPI_SCK    ),
 	.SPI_SS3     ( SPI_SS3    ),
