@@ -583,7 +583,7 @@ wire ctc_nINT;
 z80ctc_top z80ctc
 (
 	.clock(clk_sys),
-	.clock_ena(clk_7),
+	.clock_ena(pe7M3),
 	.reset(reset),
 	.din(cpu_dout),
 	.cpu_din(cpu_din),
@@ -594,11 +594,11 @@ z80ctc_top z80ctc
 	.iorq_n(nIORQ),
 	.rd_n(nRD),
 	.int_n(ctc_nINT),
-	.trg0(pe921K),
+	.trg0(pe7M3),
 	.to0(ctc_counter_0_to),
-	.trg1(pe921K),
+	.trg1(pe7M3),
 	.to1(ctc_counter_1_to),
-	.trg2(pe921K),
+	.trg2(ne7M3),
 	.to2(ctc_counter_2_to),
 	.trg3(ctc_counter_2_to)
 );

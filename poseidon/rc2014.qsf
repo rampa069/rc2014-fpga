@@ -499,6 +499,7 @@ set_global_assignment -name TIMING_ANALYZER_MULTICORNER_ANALYSIS ON
 set_global_assignment -name SMART_RECOMPILE ON
 set_global_assignment -name VERILOG_SHOW_LMF_MAPPING_MESSAGES OFF
 set_global_assignment -name VERILOG_MACRO "USE_EXTBUS=1"
+set_global_assignment -name QIP_FILE ../f18a/f18a.qip
 set_global_assignment -name QIP_FILE ../rc2014.qip
 set_global_assignment -name QIP_FILE ../rtl/z80ctc/z80ctc.qip
 set_global_assignment -name QIP_FILE pll.qip
