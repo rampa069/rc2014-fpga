@@ -20,6 +20,24 @@ The RC2014 FPGA system is designed to emulate the classic RC2014 computer archit
 
 ## Sound Interface
 - 1 x AY-3-8910 (Internal/Disconnectable): The AY-3-8910 sound interface module is integrated, offering programmable sound generation capabilities. It can be disconnected for configurational flexibility.
+ Tested with external [AY-3-8910 interface](https://github.com/electrified/rc2014-ym2149/tree/main)
+
+## RC2014 System with ROMWBW Firmware
+
+### ROMWBW Firmware:
+   - [ ROMWBW](https://github.com/wwarthen/RomWBW) software provides a complete, commercial quality implementation of CP/M (and workalike) operating systems and applications for modern Z80/180/280 retro-computing hardware systems.
+**1. User Interface:**
+   - ROMWBW typically offers a user interface accessible via serial communication (UART), allowing users to interact with the system through a terminal. But also support graphic cards.
+
+**2. IDE, Compact Flash and SD Card Support:**
+   - Support for different storage solutions. This simplifies software transfer and updates.
+
+**3. Expansion of Capabilities:**
+   - ROMWBW often adds modern capabilities to retro systems, such as support for contemporary peripherals, networking capabilities, mass storage, and more.
+
+**4. Continuous Development:**
+   - As an open-source project, ROMWBW and RC2014 can benefit from community contributions. This allows for continuous updates and improvements as bugs are discovered or new features are implemented.
+
 
 ## OSD Integration
 - The system supports the On-Screen Display (OSD) device. There are two RC2014 related subpages. Boot switches and devicesWhen connected, the OSD device is utilized internally. If disconnected, the system automatically searches for the OSD device on the bus.
