@@ -499,8 +499,18 @@ set_global_assignment -name TIMING_ANALYZER_MULTICORNER_ANALYSIS ON
 set_global_assignment -name SMART_RECOMPILE ON
 set_global_assignment -name VERILOG_SHOW_LMF_MAPPING_MESSAGES OFF
 set_global_assignment -name VERILOG_MACRO "USE_EXTBUS=1"
-set_global_assignment -name QIP_FILE ../f18a/f18a.qip
+set_global_assignment -name SYSTEMVERILOG_FILE ../v18/vdp18_sprite.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../v18/vdp18_pkg.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../v18/vdp18_pattern.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../v18/vdp18_hor_vert.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../v18/vdp18_ctrl.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../v18/vdp18_cpuio.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../v18/vdp18_core.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../v18/vdp18_col_mux.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../v18/vdp18_clk_gen.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../v18/vdp18_addr_mux.sv
 set_global_assignment -name QIP_FILE ../rc2014.qip
 set_global_assignment -name QIP_FILE ../rtl/z80ctc/z80ctc.qip
 set_global_assignment -name QIP_FILE pll.qip
+set_global_assignment -name QIP_FILE ../rtl/vram.qip
 set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -section_id Top

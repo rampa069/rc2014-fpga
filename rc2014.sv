@@ -210,6 +210,7 @@ localparam CONF_STR = {
 wire clk_sys;
 wire clk_vt;
 wire clk_7;
+wire clk_vdp;
 wire locked;
 
 
@@ -220,6 +221,7 @@ pll pll
 	.c0(clk_sys),
 	.c1(clk_vt),
 	.c2(clk_7),
+	.c3(clk_vdp),
 	.locked(locked)
 );
 `else
@@ -463,6 +465,7 @@ assign nINT=1'b1;
 assign nINT= uart1_nINT;
 assign nINT= aciaInt? UART2_CS ? uart2_nINT : 1'b1 :1'b1;
 assign nINT= ctcInt?  ctc_nINT    : 1'b1;
+assign nINT= vdp_nINT;
 
 //////////////////////
 wand nBUSRQ=1'b1;
@@ -505,6 +508,8 @@ wire LED_CS   = cpu_a[7:0] == 8'h00      && !nIORQ && nM1;
 wire CTC_CS   = cpu_a[7:2] == 6'b100010  && !nIORQ && nM1;
 wire PSG_CS   = cpu_a[7:2] == 6'b101000  && !nIORQ && nM1;
 wire SD_CS    = cpu_a[7:0] == 8'h69      && !nIORQ && nM1;
+wire TMS_CS   = cpu_a[7:2] == 7'b100110  && !nIORQ && nM1;
+
 
 wire MEM_nRD = nRD | nMREQ;
 wire MEM_nWR = nWR | nMREQ;
@@ -515,19 +520,20 @@ assign mem_rd = !MEM_nRD;
 assign mem_we = !MEM_nWR ;
 
 
-assign cpu_din = LED_CS  ? status[8:1]:
-                 UART1_CS ? UART1_D :				  
-                 UART2_CS ? aciaInt?UART2_D : BUS_D:
-					  CTC_CS   ? ctcInt? ctc_dout: BUS_D: 
-					  PSG_CS   ? psgInt? PSG_D   : BUS_D:
-					  SD_CS    ? {sd_miso,7'b0}:
+assign cpu_din = LED_CS   ? status[8:1] :
+                 TMS_CS   ? vdp_dout   :
+                 UART1_CS ? uart1_dout :
+  					  SD_CS    ? {sd_miso,7'b0}:
 					  mem_rd   ? mem_q:
+				     UART2_CS ? aciaInt?uart2_dout : BUS_D:
+					  CTC_CS   ? ctcInt? ctc_dout   : BUS_D: 
+					  PSG_CS   ? psgInt? psg_dout   : BUS_D:
 					  BUS_D;
 
 assign mem_d = mem_we ? cpu_dout : 8'bZZZZZZZZ;
 
-wire [7:0] UART1_D;
-wire [7:0] UART2_D;
+wire [7:0] uart1_dout;
+wire [7:0] uart2_dout;
 
 wire uart1_nINT,uart2_nINT;
 
@@ -539,7 +545,7 @@ acia6850 uart1
 			.addr     (cpu_a[0]),       // Register Select
 			.rw       (nWR),            // Read / Not Write  1 - Read, 0 - Write
 			.data_in  (cpu_dout),       // Data Bus In 
-			.data_out (UART1_D),        // Data Bus Out
+			.data_out (uart1_dout),        // Data Bus Out
 			.irq      (uart1_nINT),     // Interrupt Request out.
 
 			.RxC      (ne7M3),          // Receive Baud Clock
@@ -559,7 +565,7 @@ acia6850 uart2
 			.addr     (cpu_a[0]),       // Register Select
 			.rw       (nWR),            // Read / Not Write  1 - Read, 0 - Write
 			.data_in  (cpu_dout),       // Data Bus In 
-			.data_out (UART2_D),         // Data Bus Out
+			.data_out (uart2_dout),         // Data Bus Out
 			.irq      (uart2_nINT),      // Interrupt Request out.
 
 			.RxC      (ne7M3),          // Receive Baud Clock
@@ -603,11 +609,11 @@ z80ctc_top z80ctc
 	.trg3(ctc_counter_2_to)
 );
 
-wire [7:0] PSG_D;
+wire [7:0] psg_dout;
 wire [14:0] mix;
 wire [7:0] io;
 wire bc1   = psgInt? PSG_CS  && !cpu_a[0] : 1'bZ;
-wire bdir  = psgInt? PSG_CS  && !cpu_a[1] : 1'bZ;
+wire bdir  = psgInt? PSG_CS  && !nWR      : 1'bZ;
 
 wire [15:0] audio = {mix,1'b0};
 
@@ -620,9 +626,66 @@ psg ay8910
 	.bdir   (bdir   ),
 	.bc1    (bc1    ),
 	.d      (psgInt ? cpu_dout: 8'bZZZZZZZZ),
-	.q      (PSG_D   ),
+	.q      (psg_dout),
 	.mix    (mix    ),
 	.ioad   (io     )
+);
+///////////////////TMS9118/////////////////
+
+wire vdp_nRD = !TMS_CS | nRD;
+wire vdp_nWR = !TMS_CS | nWR;
+
+wire vdp_nINT;
+
+wire [7:0] vdp_dout;
+wire vram_we;
+wire [13:0] vram_a;
+wire [7:0] vram_d;
+wire [7:0] vram_q;
+
+wire [7:0] vdp_r;
+wire [7:0] vdp_g;
+wire [7:0] vdp_b;
+
+wire vdp_hsync;
+wire vdp_vsync;
+wire vdp_hblank;
+wire vdp_vblank;
+
+vdp18_core #(.is_pal_g(0), .compat_rgb_g(1)) vdp18_b(
+	 .clk_i(clk_vdp),
+	 .clk_en_10m7_i(1),
+	 .reset_n_i(~reset),
+	 .csr_n_i(vdp_nRD),
+	 .csw_n_i(vdp_nWR),
+	 .mode_i(cpu_a[1:0]),
+	 .int_n_o(vdp_nINT),
+	 .cd_i(cpu_dout),
+	 .cd_o(vdp_dout),
+	 .vram_we_o(vram_we),
+	 .vram_a_o(vram_a),
+	 .vram_d_o(vram_d),
+	 .vram_d_i(vram_q),
+	 .col_o(),
+	 .rgb_r_o(vdp_r),
+	 .rgb_g_o(vdp_g),
+	 .rgb_b_o(vdp_b),
+	 .hsync_n_o(vdp_hsync),
+	 .vsync_n_o(vdp_vsync),
+	 .blank_n_o(),
+	 .border_i(),
+	 .hblank_o(vdp_hblank),
+	 .vblank_o(vdp_vblank),
+	 .comp_sync_n_o()
+	 );
+
+vram vram
+(
+ .clock   (clk_sys),
+ .wren    (vram_we),
+ .address (vram_a),
+ .data    (vram_d),
+ .q       (vram_q)
 );
 
 ////////////////////   RAM/ROM   ///////////////////
@@ -732,15 +795,16 @@ audiodac_r(
 ////////////////////   VIDEO   ///////////////////
 
 wire HSync,VSync;
-wire [3:0] Rx,Gx,Bx;
+wire [5:0] Rx,Gx,Bx;
+wire is_crt = status[8];
 
-assign Rx=4'b0;
-assign Gx= vga_fb ? 4'b1111 : vga_ht? 4'b1000: 4'b0000;
-assign Bx=4'b0;
+assign Rx= is_crt? vdp_r[7:2] : 6'b0;
+assign Gx= is_crt? vdp_g[7:2] : vga_fb ? 6'b111111 : vga_ht? 6'b100000: 6'b000000;
+assign Bx= is_crt? vdp_b[7:2] : 6'b0;
 
-mist_video #(.COLOR_DEPTH(4), .OUT_COLOR_DEPTH(VGA_BITS), .BIG_OSD(BIG_OSD)) mist_video (
+mist_video #(.COLOR_DEPTH(6), .OUT_COLOR_DEPTH(VGA_BITS), .BIG_OSD(BIG_OSD)) mist_video (
 	
-   .clk_sys (CLOCK_50),
+   .clk_sys ( is_crt? clk_vdp : CLOCK_50),
 	// OSD SPI interface
 	.SPI_SCK     ( SPI_SCK    ),
 	.SPI_SS3     ( SPI_SS3    ),
@@ -750,7 +814,7 @@ mist_video #(.COLOR_DEPTH(4), .OUT_COLOR_DEPTH(VGA_BITS), .BIG_OSD(BIG_OSD)) mis
 
 	.ce_divider  ( 3'd1       ),
 
-	.scandoubler_disable ( 1'b1 ),
+	.scandoubler_disable ( is_crt? scandoubler_disable : 1'b1 ),
 	.no_csync    ( no_csync   ),
 	.ypbpr       ( ypbpr      ),
 	.rotate      ( 2'b00      ),
@@ -761,8 +825,8 @@ mist_video #(.COLOR_DEPTH(4), .OUT_COLOR_DEPTH(VGA_BITS), .BIG_OSD(BIG_OSD)) mis
 	.G           ( Gx ),
 	.B           ( Bx ),
 
-	.HSync       ( ~HSync      ),
-	.VSync       ( ~VSync      ),
+	.HSync       ( is_crt? vdp_hsync : HSync      ),
+	.VSync       ( is_crt? vdp_vsync : VSync      ),
 
 	// MiST video output signals
 	.VGA_R       ( VGA_R      ),
