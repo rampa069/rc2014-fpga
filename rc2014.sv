@@ -211,6 +211,7 @@ wire clk_sys;
 wire clk_vt;
 wire clk_7;
 wire clk_vdp;
+wire clk_50;
 wire locked;
 
 
@@ -219,10 +220,15 @@ pll pll
 (
    .inclk0(CLOCK_50),
 	.c0(clk_sys),
-	.c1(clk_vt),
+	.c1(clk_vdp),
 	.c2(clk_7),
-	.c3(clk_vdp),
 	.locked(locked)
+);
+pll1 pll1
+(
+   .inclk0(CLOCK_50),
+	.c0(clk_vt),
+	.c1(clk_50),
 );
 `else
 pll pll
@@ -435,7 +441,7 @@ wire ps2k_c,ps2k_d;
 		.bps(115200),
 
       .cpuclk (clk_vt),
-	   .clk50mhz (CLOCK_50),
+	   .clk50mhz (clk_50),
       .reset (reset)
    );
 
@@ -508,7 +514,7 @@ wire LED_CS   = cpu_a[7:0] == 8'h00      && !nIORQ && nM1;
 wire CTC_CS   = cpu_a[7:2] == 6'b100010  && !nIORQ && nM1;
 wire PSG_CS   = cpu_a[7:2] == 6'b101000  && !nIORQ && nM1;
 wire SD_CS    = cpu_a[7:0] == 8'h69      && !nIORQ && nM1;
-wire TMS_CS   = cpu_a[7:2] == 7'b100110  && !nIORQ && nM1;
+wire TMS_CS   = cpu_a[7:2] == 6'b100110  && !nIORQ && !nM1;
 
 
 wire MEM_nRD = nRD | nMREQ;
@@ -630,16 +636,14 @@ psg ay8910
 	.mix    (mix    ),
 	.ioad   (io     )
 );
-///////////////////TMS9118/////////////////
+///////////////////TMS9958/////////////////
 
 wire vdp_nRD = !TMS_CS | nRD;
 wire vdp_nWR = !TMS_CS | nWR;
 
-wire vdp_nINT;
-
 wire [7:0] vdp_dout;
 wire vram_we;
-wire [13:0] vram_a;
+wire [15:0] vram_a;
 wire [7:0] vram_d;
 wire [7:0] vram_q;
 
@@ -652,37 +656,68 @@ wire vdp_vsync;
 wire vdp_hblank;
 wire vdp_vblank;
 
-vdp18_core #(.is_pal_g(0), .compat_rgb_g(1)) vdp18_b(
-	 .clk_i(clk_vdp),
-	 .clk_en_10m7_i(1),
-	 .reset_n_i(~reset),
-	 .csr_n_i(vdp_nRD),
-	 .csw_n_i(vdp_nWR),
-	 .mode_i(cpu_a[1:0]),
-	 .int_n_o(vdp_nINT),
-	 .cd_i(cpu_dout),
-	 .cd_o(vdp_dout),
-	 .vram_we_o(vram_we),
-	 .vram_a_o(vram_a),
-	 .vram_d_o(vram_d),
-	 .vram_d_i(vram_q),
-	 .col_o(),
-	 .rgb_r_o(vdp_r),
-	 .rgb_g_o(vdp_g),
-	 .rgb_b_o(vdp_b),
-	 .hsync_n_o(vdp_hsync),
-	 .vsync_n_o(vdp_vsync),
-	 .blank_n_o(),
-	 .border_i(),
-	 .hblank_o(vdp_hblank),
-	 .vblank_o(vdp_vblank),
-	 .comp_sync_n_o()
+//vdp18_core #(.is_pal_g(0), .compat_rgb_g(1)) vdp18_b(
+//	 .clk_i(clk_vdp),
+//	 .clk_en_10m7_i(1),
+//	 .reset_n_i(~reset),
+//	 .csr_n_i(vdp_nRD),
+//	 .csw_n_i(vdp_nWR),
+//	 .mode_i(cpu_a[1:0]),
+//	 .int_n_o(vdp_nINT),
+//	 .cd_i(cpu_dout),
+//	 .cd_o(vdp_dout),
+//	 .vram_we_o(vram_we),
+//	 .vram_a_o(vram_a),
+//	 .vram_d_o(vram_d),
+//	 .vram_d_i(vram_q),
+//	 .col_o(),
+//	 .rgb_r_o(vdp_r),
+//	 .rgb_g_o(vdp_g),
+//	 .rgb_b_o(vdp_b),
+//	 .hsync_n_o(vdp_hsync),
+//	 .vsync_n_o(vdp_vsync),
+//	 .blank_n_o(),
+//	 .border_i(),
+//	 .hblank_o(vdp_hblank),
+//	 .vblank_o(vdp_vblank),
+//	 .comp_sync_n_o()
+//	 );
+
+
+
+wire vdp_nINT;
+
+vdp  vdp18
+(
+	 .CLK21M  (clk_vdp),
+	 .RESET   (reset),
+	 .REQ     (TMS_CS),
+	 .ACK     (     ),
+	 .WRT     (TMS_CS & !nWR),
+	 .ADR     (cpu_a),
+	 .INT_N   (vdp_nINT),
+	 .DBI     (vdp_dout),
+	 .DBO     (cpu_dout),
+	 //
+	 .PRAMOE_N(        ),
+	 .PRAMWE_N(vram_we),
+	 .PRAMADR (vram_a),
+	 .PRAMDBO (vram_d),
+	 .PRAMDBI (vram_q),
+	 //
+	 .PVIDEOR (vdp_r),
+	 .PVIDEOG (vdp_g),
+	 .PVIDEOB (vdp_b),
+	 .PVIDEOHS_N (vdp_hsync),
+	 .PVIDEOVS_N (vdp_vsync)
 	 );
+
+
 
 vram vram
 (
  .clock   (clk_sys),
- .wren    (vram_we),
+ .wren    (~vram_we),
  .address (vram_a),
  .data    (vram_d),
  .q       (vram_q)
@@ -802,9 +837,9 @@ assign Rx= is_crt? vdp_r[7:2] : 6'b0;
 assign Gx= is_crt? vdp_g[7:2] : vga_fb ? 6'b111111 : vga_ht? 6'b100000: 6'b000000;
 assign Bx= is_crt? vdp_b[7:2] : 6'b0;
 
-mist_video #(.COLOR_DEPTH(6), .OUT_COLOR_DEPTH(VGA_BITS), .BIG_OSD(BIG_OSD)) mist_video (
+mist_video #(.COLOR_DEPTH(6), .OUT_COLOR_DEPTH(VGA_BITS), .VIDEO_CLEANER(1),.BIG_OSD(BIG_OSD)) mist_video (
 	
-   .clk_sys ( is_crt? clk_vdp : CLOCK_50),
+   .clk_sys ( is_crt ? clk_vdp : clk_50),
 	// OSD SPI interface
 	.SPI_SCK     ( SPI_SCK    ),
 	.SPI_SS3     ( SPI_SS3    ),
