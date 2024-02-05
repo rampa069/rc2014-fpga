@@ -1,5 +1,7 @@
 //
-// RC2014, ACIA, 7.37280000 MHZ 
+// RC2014, ACIA, 
+// CLK_CPU 7.37280000 MHZ 
+// CLK_VDP 21.477MHZ
 //
 
 `default_nettype none
@@ -244,7 +246,7 @@ wire CLOCK_50;
 pll1 pll1
 (
    .inclk0(CLOCK_27),
-	.c0(CLOCK_50),
+	.c0(CLOCK_50)
 );
 
 `endif	
@@ -514,7 +516,7 @@ wire LED_CS   = cpu_a[7:0] == 8'h00      && !nIORQ && nM1;
 wire CTC_CS   = cpu_a[7:2] == 6'b100010  && !nIORQ && nM1;
 wire PSG_CS   = cpu_a[7:2] == 6'b101000  && !nIORQ && nM1;
 wire SD_CS    = cpu_a[7:0] == 8'h69      && !nIORQ && nM1;
-wire TMS_CS   = cpu_a[7:2] == 6'b100110  && !nIORQ && !nM1;
+wire TMS_CS   = cpu_a[7:2] == 6'b100110  && !nIORQ && nM1;
 
 
 wire MEM_nRD = nRD | nMREQ;
@@ -638,91 +640,109 @@ psg ay8910
 );
 ///////////////////TMS9958/////////////////
 
-wire vdp_nRD = !TMS_CS | nRD;
-wire vdp_nWR = !TMS_CS | nWR;
+
+
+
+wire        vram_we,vram_rd;
+wire 			vram_we_h,vram_we_l;
+
+wire [16:0] vram_a;
+wire [7:0]  vram_q_h,vram_q_l;
+wire [7:0]  vram_d;
 
 wire [7:0] vdp_dout;
-wire vram_we;
-wire [15:0] vram_a;
-wire [7:0] vram_d;
-wire [7:0] vram_q;
-
-wire [7:0] vdp_r;
-wire [7:0] vdp_g;
-wire [7:0] vdp_b;
-
-wire vdp_hsync;
-wire vdp_vsync;
-wire vdp_hblank;
-wire vdp_vblank;
-
-//vdp18_core #(.is_pal_g(0), .compat_rgb_g(1)) vdp18_b(
-//	 .clk_i(clk_vdp),
-//	 .clk_en_10m7_i(1),
-//	 .reset_n_i(~reset),
-//	 .csr_n_i(vdp_nRD),
-//	 .csw_n_i(vdp_nWR),
-//	 .mode_i(cpu_a[1:0]),
-//	 .int_n_o(vdp_nINT),
-//	 .cd_i(cpu_dout),
-//	 .cd_o(vdp_dout),
-//	 .vram_we_o(vram_we),
-//	 .vram_a_o(vram_a),
-//	 .vram_d_o(vram_d),
-//	 .vram_d_i(vram_q),
-//	 .col_o(),
-//	 .rgb_r_o(vdp_r),
-//	 .rgb_g_o(vdp_g),
-//	 .rgb_b_o(vdp_b),
-//	 .hsync_n_o(vdp_hsync),
-//	 .vsync_n_o(vdp_vsync),
-//	 .blank_n_o(),
-//	 .border_i(),
-//	 .hblank_o(vdp_hblank),
-//	 .vblank_o(vdp_vblank),
-//	 .comp_sync_n_o()
-//	 );
-
+wire [5:0] vdp_r;
+wire [5:0] vdp_g;
+wire [5:0] vdp_b;
+wire       vdp_hsync,vdp_vsync;
+wire       vdp_hblank,vdp_vblank;
 
 
 wire vdp_nINT;
+wire PVIDEODLCLK;
+wire PVIDEODHCLK;
 
-vdp  vdp18
+
+
+wire req = ~((nIORQ & nMREQ) | (nWR & nRD)| iack);
+vdp  TMS9958
 (
 	 .CLK21M  (clk_vdp),
 	 .RESET   (reset),
-	 .REQ     (TMS_CS),
+	 .REQ     (req & TMS_CS),
 	 .ACK     (     ),
-	 .WRT     (TMS_CS & !nWR),
+	 .WRT     (~nWR),
 	 .ADR     (cpu_a),
 	 .INT_N   (vdp_nINT),
-	 .DBI     (vdp_dout),
+	 .DBI     (vdp_tmp),
 	 .DBO     (cpu_dout),
 	 //
-	 .PRAMOE_N(        ),
+	 .PRAMOE_N(vram_rd),
 	 .PRAMWE_N(vram_we),
 	 .PRAMADR (vram_a),
 	 .PRAMDBO (vram_d),
-	 .PRAMDBI (vram_q),
+	 .PRAMDBI ({vram_q_h,vram_q_l}),
+	 .PVIDEODHCLK(PVIDEODHCLK),
+	 .PVIDEODLCLK(PVIDEODLCLK),
+	 .VDPSPEEDMODE(1),
+    .CENTERYJK_R25_N(0),
 	 //
+	 .VDP_ID (5'b00000),
+	 //
+	 .DISPRESO(1),
 	 .PVIDEOR (vdp_r),
 	 .PVIDEOG (vdp_g),
 	 .PVIDEOB (vdp_b),
 	 .PVIDEOHS_N (vdp_hsync),
-	 .PVIDEOVS_N (vdp_vsync)
+	 .PVIDEOVS_N (vdp_vsync),
+    .HBLANK(vdp_hblank),
+    .VBLANK(vdp_vblank),
+	 .LEGACY_VGA(1),
+    .RATIOMODE(3'b000)
+
+
 	 );
 
 
+	 
+assign vram_we_l = ~vram_we & PVIDEODLCLK & ~vram_a[16];
+assign vram_we_h = ~vram_we & PVIDEODLCLK & vram_a[16];
 
-vram vram
+reg [7:0] latch_reg,vdp_tmp;
+
+always @(posedge clk_vdp) begin
+    latch_reg <= vdp_tmp;  // Latchea los datos de entrada en el flanco de subida del reloj del TMS
+    vdp_dout <= latch_reg;  // Propaga los datos latched hacia el Z80
+  end
+
+spram #(.addr_width(16),.mem_name("VDP1")) vram_lo
 (
- .clock   (clk_sys),
- .wren    (~vram_we),
- .address (vram_a),
- .data    (vram_d),
- .q       (vram_q)
+   .clock(clk_sys),
+   .address(vram_a),
+   .wren(vram_we_l),
+   .data(vram_d),
+   .q(vram_q_l)
 );
-
+spram #(.addr_width(16),.mem_name("VDP2")) vram_hi
+(
+   .clock(clk_sys),
+   .address(vram_a),
+   .wren(vram_we_h),
+   .data(vram_d),
+   .q(vram_q_h)
+);
+	 
+logic iack;
+always @(posedge clk_sys) begin
+   if (reset) iack <= 0;
+   else begin
+      if (nIORQ  & nMREQ)
+         iack <= 0;
+      else
+         if (req)
+            iack <= 1;
+   end
+end
 ////////////////////   RAM/ROM   ///////////////////
 
 wire[19:0] mem_a;
@@ -830,16 +850,18 @@ audiodac_r(
 ////////////////////   VIDEO   ///////////////////
 
 wire HSync,VSync;
+wire HBlank,VBlank;
 wire [5:0] Rx,Gx,Bx;
 wire is_crt = status[8];
 
-assign Rx= is_crt? vdp_r[7:2] : 6'b0;
-assign Gx= is_crt? vdp_g[7:2] : vga_fb ? 6'b111111 : vga_ht? 6'b100000: 6'b000000;
-assign Bx= is_crt? vdp_b[7:2] : 6'b0;
+assign Rx= is_crt? vdp_r : 6'b0;
+assign Gx= is_crt? vdp_g : vga_fb ? 6'b111111 : vga_ht? 6'b100000: 6'b000000;
+assign Bx= is_crt? vdp_b : 6'b0;
 
-mist_video #(.COLOR_DEPTH(6), .OUT_COLOR_DEPTH(VGA_BITS), .VIDEO_CLEANER(1),.BIG_OSD(BIG_OSD)) mist_video (
+mist_video #(.COLOR_DEPTH(6), .OUT_COLOR_DEPTH(VGA_BITS),.BIG_OSD(BIG_OSD)) mist_video (
 	
    .clk_sys ( is_crt ? clk_vdp : clk_50),
+	//.clk_sys(clk_50),
 	// OSD SPI interface
 	.SPI_SCK     ( SPI_SCK    ),
 	.SPI_SS3     ( SPI_SS3    ),
@@ -849,7 +871,7 @@ mist_video #(.COLOR_DEPTH(6), .OUT_COLOR_DEPTH(VGA_BITS), .VIDEO_CLEANER(1),.BIG
 
 	.ce_divider  ( 3'd1       ),
 
-	.scandoubler_disable ( is_crt? scandoubler_disable : 1'b1 ),
+	.scandoubler_disable ( 1'b1 ),
 	.no_csync    ( no_csync   ),
 	.ypbpr       ( ypbpr      ),
 	.rotate      ( 2'b00      ),
@@ -862,6 +884,8 @@ mist_video #(.COLOR_DEPTH(6), .OUT_COLOR_DEPTH(VGA_BITS), .VIDEO_CLEANER(1),.BIG
 
 	.HSync       ( is_crt? vdp_hsync : HSync      ),
 	.VSync       ( is_crt? vdp_vsync : VSync      ),
+	.HBlank      ( is_crt? vdp_hblank : 1'b0      ),
+	.VBlank      ( is_crt? vdp_vblank : 1'b0      ),
 
 	// MiST video output signals
 	.VGA_R       ( VGA_R      ),

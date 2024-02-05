@@ -83,7 +83,8 @@ PACKAGE VDP_PACKAGE IS
 
     -- VDP ID
 --  CONSTANT VDP_ID : STD_LOGIC_VECTOR(  4 DOWNTO 0 ) := "00000";  -- V9938
-    CONSTANT VDP_ID : STD_LOGIC_VECTOR(  4 DOWNTO 0 ) := "00010";  -- V9958
+--  CONSTANT VDP_ID : STD_LOGIC_VECTOR(  4 DOWNTO 0 ) := "00010";  -- V9958
+--  SHARED VARIABLE VDP_ID : STD_LOGIC_VECTOR(  4 DOWNTO 0 );      -- managed by Switched I/O ports
 
     -- display start position ( when adjust=(0,0) )
     -- [from V9938 Technical Data Book]
@@ -116,12 +117,13 @@ PACKAGE VDP_PACKAGE IS
 
     -- LEFT-TOP POSITION OF VISIBLE AREA
     CONSTANT OFFSET_X                           : STD_LOGIC_VECTOR(  6 DOWNTO 0 ) := "0110001"; -- 49
-    SHARED VARIABLE OFFSET_Y                    : STD_LOGIC_VECTOR(  6 DOWNTO 0 ) := "0010011"; -- 19 => managed by Switched I/O Ports
+--  CONSTANT OFFSET_Y                           : STD_LOGIC_VECTOR(  6 DOWNTO 0 ) := "0010011"; -- 19
+--  SHARED VARIABLE OFFSET_Y                    : STD_LOGIC_VECTOR(  6 DOWNTO 0 );              -- managed by Switched I/O ports
 
     CONSTANT LED_TV_X_NTSC                      : INTEGER := -3;
-    CONSTANT LED_TV_Y_NTSC                      : INTEGER := 1;
+    CONSTANT LED_TV_Y_NTSC                      : INTEGER := 19;
     CONSTANT LED_TV_X_PAL                       : INTEGER := -2;
-    CONSTANT LED_TV_Y_PAL                       : INTEGER := 3;
+    CONSTANT LED_TV_Y_PAL                       : INTEGER := 14;
 
 --  CONSTANT DISPLAY_OFFSET_NTSC                : INTEGER := 0;
 --  CONSTANT DISPLAY_OFFSET_PAL                 : INTEGER := 27;
@@ -154,11 +156,8 @@ PACKAGE VDP_PACKAGE IS
 --  CONSTANT H_BLANKING_START                   : INTEGER := CLOCKS_PER_LINE - 59 - 27 + 1;
 
     CONSTANT V_BLANKING_START_192_NTSC          : INTEGER := 240;
-    CONSTANT V_BLANKING_START_212_NTSC          : INTEGER := 250;
+    CONSTANT V_BLANKING_START_212_NTSC          : INTEGER := 242;
     CONSTANT V_BLANKING_START_192_PAL           : INTEGER := 263;
     CONSTANT V_BLANKING_START_212_PAL           : INTEGER := 273;
-
-    SHARED VARIABLE DEBUG_ENA                   : INTEGER;
-    SHARED VARIABLE BREAK_POINT                 : STD_LOGIC_VECTOR(  7 DOWNTO 0 );
 
 END VDP_PACKAGE;

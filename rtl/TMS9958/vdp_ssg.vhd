@@ -101,7 +101,8 @@ ENTITY VDP_SSG IS
         REG_R25_MSK             : IN    STD_LOGIC;
         REG_R27_H_SCROLL        : IN    STD_LOGIC_VECTOR(  2 DOWNTO 0 );
         REG_R25_YJK             : IN    STD_LOGIC;
-        CENTERYJK_R25_N         : IN    STD_LOGIC
+        CENTERYJK_R25_N         : IN    STD_LOGIC;
+        OFFSET_Y                : IN    STD_LOGIC_VECTOR(  6 DOWNTO 0 )
     );
 END VDP_SSG;
 
@@ -121,7 +122,8 @@ ARCHITECTURE RTL OF VDP_SSG IS
 
             PAL_MODE            : IN    STD_LOGIC;
             INTERLACE_MODE      : IN    STD_LOGIC;
-            Y212_MODE           : IN    STD_LOGIC
+            Y212_MODE           : IN    STD_LOGIC;
+            OFFSET_Y            : IN    STD_LOGIC_VECTOR(  6 DOWNTO 0 )
         );
     END COMPONENT;
 
@@ -191,7 +193,8 @@ BEGIN
 
         PAL_MODE            => VDPR9PALMODE         ,
         INTERLACE_MODE      => REG_R9_INTERLACE_MODE,
-        Y212_MODE           => REG_R9_Y_DOTS
+        Y212_MODE           => REG_R9_Y_DOTS        ,
+        OFFSET_Y            => OFFSET_Y
     );
 
     -----------------------------------------------------------------------------
@@ -388,7 +391,7 @@ BEGIN
 
             IF( W_HSYNC = '1' )THEN
                 -- JP: PREWINDOW_Xが 1になるタイミングと同じタイミングでY座標の計算
-                IF(  W_V_BLANKING_END = '1' )THEN
+                IF( W_V_BLANKING_END = '1' )THEN
                     IF(    REG_R9_Y_DOTS = '0' AND VDPR9PALMODE = '0' )THEN
                         PREDOTCOUNTERYPSTART := "111100110";                    -- TOP BORDER LINES = -26
                     ELSIF( REG_R9_Y_DOTS = '1' AND VDPR9PALMODE = '0' )THEN

@@ -87,8 +87,8 @@
 --
 -- JP: ESE-VDPコア(vdp.vhd)が生成したビデオ信号を、VGAタイミングに
 -- JP: 変換するアップスキャンコンバータです。
--- JP: NTSCは水平同期周波数が15.7KHz、垂直同期周波数が60Hzですが、
--- JP: VGAの水平同期周波数は31.5KHz、垂直同期周波数は60Hzであり、
+-- JP: NTSCは水平同期周波数が15.7kHz、垂直同期周波数が60Hzですが、
+-- JP: VGAの水平同期周波数は31.5kHz、垂直同期周波数は60Hzであり、
 -- JP: ライン数だけがほぼ倍になったようなタイミングになります。
 -- JP: そこで、vdpを ntscモードで動かし、各ラインを倍の速度で
 -- JP: 二度描画することでスキャンコンバートを実現しています。
@@ -112,16 +112,18 @@ ENTITY VDP_VGA IS
         HCOUNTERIN      : IN    STD_LOGIC_VECTOR(10 DOWNTO 0);
         VCOUNTERIN      : IN    STD_LOGIC_VECTOR(10 DOWNTO 0);
         -- MODE
-        PALMODE         : IN    STD_LOGIC; -- caro
+        PALMODE         : IN    STD_LOGIC; -- Added by caro
         INTERLACEMODE   : IN    STD_LOGIC;
         LEGACY_VGA      : IN    STD_LOGIC;
         -- VIDEO OUTPUT
         VIDEOROUT       : OUT   STD_LOGIC_VECTOR( 5 DOWNTO 0);
         VIDEOGOUT       : OUT   STD_LOGIC_VECTOR( 5 DOWNTO 0);
         VIDEOBOUT       : OUT   STD_LOGIC_VECTOR( 5 DOWNTO 0);
-        VIDEODEOUT      : OUT   STD_LOGIC;
+        VIDEODEOUT      : OUT   STD_LOGIC;        
         VIDEOHSOUT_N    : OUT   STD_LOGIC;
         VIDEOVSOUT_N    : OUT   STD_LOGIC;
+        -- HDMI SUPPORT
+        BLANK_O         : OUT   STD_LOGIC;
         -- SWITCHED I/O SIGNALS
         RATIOMODE       : IN    STD_LOGIC_VECTOR( 2 DOWNTO 0)
     );
@@ -145,10 +147,10 @@ ARCHITECTURE RTL OF VDP_VGA IS
     END COMPONENT;
 
     SIGNAL FF_HSYNC_N   : STD_LOGIC;
+    SIGNAL FF_VSYNC_N   : STD_LOGIC;
 
     -- VIDEO OUTPUT ENABLE
     SIGNAL VIDEOOUTX    : STD_LOGIC;
-    SIGNAL VIDEOOUTY        : STD_LOGIC;
 
     -- DOUBLE BUFFER SIGNAL
     SIGNAL XPOSITIONW   : STD_LOGIC_VECTOR(  9 DOWNTO 0 );
@@ -158,16 +160,15 @@ ARCHITECTURE RTL OF VDP_VGA IS
     SIGNAL DATAROUT     : STD_LOGIC_VECTOR(  5 DOWNTO 0 );
     SIGNAL DATAGOUT     : STD_LOGIC_VECTOR(  5 DOWNTO 0 );
     SIGNAL DATABOUT     : STD_LOGIC_VECTOR(  5 DOWNTO 0 );
-    SIGNAL DATADEOUT        : STD_LOGIC;
 
     -- DISP_START_X + DISP_WIDTH < CLOCKS_PER_LINE/2 = 684
     CONSTANT DISP_WIDTH             : INTEGER := 576;
     SHARED VARIABLE DISP_START_X    : INTEGER := 684 - DISP_WIDTH - 2;          -- 106
 BEGIN
 
-    VIDEOROUT <= DATAROUT WHEN VIDEOOUTX = '1' ELSE (OTHERS => '0');
-    VIDEOGOUT <= DATAGOUT WHEN VIDEOOUTX = '1' ELSE (OTHERS => '0');
-    VIDEOBOUT <= DATABOUT WHEN VIDEOOUTX = '1' ELSE (OTHERS => '0');
+    VIDEOROUT <= DATAROUT WHEN( VIDEOOUTX = '1' )ELSE (OTHERS => '0');
+    VIDEOGOUT <= DATAGOUT WHEN( VIDEOOUTX = '1' )ELSE (OTHERS => '0');
+    VIDEOBOUT <= DATABOUT WHEN( VIDEOOUTX = '1' )ELSE (OTHERS => '0');
 
     DBUF : VDP_DOUBLEBUF
     PORT MAP(
@@ -244,34 +245,34 @@ BEGIN
         CONSTANT CENTER_Y       : INTEGER := 12;                                -- based on HDMI AV output
     BEGIN
         IF( RESET = '1' )THEN
-            VIDEOVSOUT_N <= '1';
+            FF_VSYNC_N <= '1';
         ELSIF( CLK21M'EVENT AND CLK21M = '1' )THEN
-            IF ( PALMODE = '0' ) THEN -- caro
-                IF( INTERLACEMODE = '0' ) THEN
+            IF( PALMODE = '0' )THEN
+                IF( INTERLACEMODE = '0' )THEN
                     IF( (VCOUNTERIN = 3*2 + CENTER_Y) OR (VCOUNTERIN = 524 + 3*2 + CENTER_Y) )THEN
-                        VIDEOVSOUT_N <= '0';
+                        FF_VSYNC_N <= '0';
                     ELSIF( (VCOUNTERIN = 6*2 + CENTER_Y) OR (VCOUNTERIN = 524 + 6*2 + CENTER_Y) )THEN
-                        VIDEOVSOUT_N <= '1';
+                        FF_VSYNC_N <= '1';
                     END IF;
                 ELSE
                     IF( (VCOUNTERIN = 3*2 + CENTER_Y) OR (VCOUNTERIN = 525 + 3*2 + CENTER_Y) )THEN
-                        VIDEOVSOUT_N <= '0';
+                        FF_VSYNC_N <= '0';
                     ELSIF( (VCOUNTERIN = 6*2 + CENTER_Y) OR (VCOUNTERIN = 525 + 6*2 + CENTER_Y) )THEN
-                        VIDEOVSOUT_N <= '1';
+                        FF_VSYNC_N <= '1';
                     END IF;
                 END IF;
             ELSE
-                IF( INTERLACEMODE = '0' ) THEN
+                IF( INTERLACEMODE = '0' )THEN
                     IF( (VCOUNTERIN = 3*2 + CENTER_Y + 6) OR (VCOUNTERIN = 626 + 3*2 + CENTER_Y + 6) )THEN
-                        VIDEOVSOUT_N <= '0';
+                        FF_VSYNC_N <= '0';
                     ELSIF( (VCOUNTERIN = 6*2 + CENTER_Y + 6) OR (VCOUNTERIN = 626 + 6*2 + CENTER_Y + 6) )THEN
-                        VIDEOVSOUT_N <= '1';
+                        FF_VSYNC_N <= '1';
                     END IF;
                 ELSE
                     IF( (VCOUNTERIN = 3*2 + CENTER_Y + 6) OR (VCOUNTERIN = 625 + 3*2 + CENTER_Y + 6) )THEN
-                        VIDEOVSOUT_N <= '0';
+                        FF_VSYNC_N <= '0';
                     ELSIF( (VCOUNTERIN = 6*2 + CENTER_Y + 6) OR (VCOUNTERIN = 625 + 6*2 + CENTER_Y + 6) )THEN
-                        VIDEOVSOUT_N <= '1';
+                        FF_VSYNC_N <= '1';
                     END IF;
                 END IF;
             END IF;
@@ -298,47 +299,22 @@ BEGIN
     BEGIN
         IF( RESET = '1' )THEN
             VIDEOOUTX <= '0';
-            VIDEOOUTY <= '0';
         ELSIF( CLK21M'EVENT AND CLK21M = '1' )THEN
             IF( (HCOUNTERIN = DISP_START_X) OR
                     ((HCOUNTERIN = DISP_START_X + (CLOCKS_PER_LINE/2)) AND INTERLACEMODE = '0') )THEN
-                VIDEOOUTX <= VIDEOOUTY;
+                VIDEOOUTX <= '1';
             ELSIF( (HCOUNTERIN = DISP_START_X + DISP_WIDTH) OR
                     (HCOUNTERIN = DISP_START_X + DISP_WIDTH + (CLOCKS_PER_LINE/2)) )THEN
                 VIDEOOUTX <= '0';
             END IF;
-
-                IF( INTERLACEMODE='0' ) THEN
-                    -- NON-INTERLACE
-                    -- 3+3+16 = 19
-                    IF( (VCOUNTERIN = 20*2) OR
-                            ((VCOUNTERIN = 524+20*2) AND (PALMODE = '0')) OR
-                            ((VCOUNTERIN = 626+20*2) AND (PALMODE = '1')) ) THEN
-                        VIDEOOUTY <= '1';
-                    ELSIF(  ((VCOUNTERIN = 524) AND (PALMODE = '0')) OR
-                            ((VCOUNTERIN = 626) AND (PALMODE = '1')) OR
-                             (VCOUNTERIN = 0) ) THEN
-                        VIDEOOUTY <= '0';
-                    END IF;
-                ELSE
-                    -- INTERLACE
-                    IF( (VCOUNTERIN = 20*2) OR
-                            -- +1 SHOULD BE NEEDED.
-                            -- BECAUSE ODD FIELD'S START IS DELAYED HALF LINE.
-                            -- SO THE START POSITION OF DISPLAY TIME SHOULD BE
-                            -- DELAYED MORE HALF LINE.
-                            ((VCOUNTERIN = 525+20*2 + 1) AND (PALMODE = '0')) OR
-                            ((VCOUNTERIN = 625+20*2 + 1) AND (PALMODE = '1')) ) THEN
-                        VIDEOOUTY <= '1';
-                    ELSIF(  ((VCOUNTERIN = 525) AND (PALMODE = '0')) OR
-                            ((VCOUNTERIN = 625) AND (PALMODE = '1')) OR
-                             (VCOUNTERIN = 0) ) THEN
-                        VIDEOOUTY <= '0';
-                    END IF;
-                END IF;
         END IF;
     END PROCESS;
 
-    VIDEODEOUT <= VIDEOOUTX;
     VIDEOHSOUT_N <= FF_HSYNC_N;
+    VIDEOVSOUT_N <= FF_VSYNC_N;
+    VIDEODEOUT   <= VIDEOOUTX;
+
+    -- HDMI SUPPORT
+    BLANK_O <= '1' WHEN( VIDEOOUTX = '0' OR FF_VSYNC_N = '0' )ELSE '0';
+
 END RTL;
