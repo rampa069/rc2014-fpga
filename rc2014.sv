@@ -412,8 +412,8 @@ wire vt_vsync;
 		.rts (ctscts),
 		.rtscts (1'b0),
 
-      .ps2k_c (ps2k_c),
-      .ps2k_d (ps2k_d),
+      .ps2k_c (is_crt? 8'b1:ps2k_c),
+      .ps2k_d (is_crt? 8'b1:ps2k_d),
       .teste (1'b0),
       .testf (1'b0),
       .vga_cursor_block (1'b1),
@@ -452,7 +452,7 @@ wand nINT;
 assign nINT=1'b1;
 assign nINT= uart1_nINT;
 assign nINT= aciaInt? UART2_CS ? uart2_nINT : 1'b1 :1'b1;
-assign nINT= ctcInt?  ctc_nINT    : 1'b1;
+assign nINT= ctcInt?  ctc_nINT: 1'b1;
 assign nINT= vdp_nINT;
 
 //////////////////////
@@ -490,14 +490,14 @@ T80pa cpu
 	.DI(cpu_din)
 );
 
-wire UART1_CS = cpu_a[7:1] == 7'b1000000 && !nIORQ && nM1;
-wire UART2_CS = cpu_a[7:1] == 7'b0100000 && !nIORQ && nM1;
-wire LED_CS   = cpu_a[7:0] == 8'h00      && !nIORQ && nM1;
-wire CTC_CS   = cpu_a[7:2] == 6'b100010  && !nIORQ && nM1;
-wire PSG_CS   = cpu_a[7:2] == 6'b101000  && !nIORQ && nM1;
-wire SD_CS    = cpu_a[7:0] == 8'h69      && !nIORQ && nM1;
-wire TMS_CS   = cpu_a[7:2] == 6'b100110  && !nIORQ && nM1;
-
+wire UART1_CS = cpu_a[7:1] == 7'b1000000 && !nIORQ && nM1;    //
+wire UART2_CS = cpu_a[7:1] == 7'b0100000 && !nIORQ && nM1;    //
+wire LED_CS   = cpu_a[7:0] == 8'h00      && !nIORQ && nM1;    //
+wire CTC_CS   = cpu_a[7:2] == 6'b100010  && !nIORQ && nM1;    // $88-8B
+wire PSG_CS   = cpu_a[7:2] == 6'b101000  && !nIORQ && nM1;    // $A0-A1
+wire SD_CS    = cpu_a[7:0] == 8'h69      && !nIORQ && nM1;    // $69
+wire TMS_CS   = cpu_a[7:2] == 6'b100110  && !nIORQ && nM1;    // 
+wire PPI_CS   = cpu_a[7:2] == 6'b101010  && !nIORQ && nM1;    // $A8-AB
 
 wire MEM_nRD = nRD | nMREQ;
 wire MEM_nWR = nWR | nMREQ;
@@ -510,6 +510,7 @@ assign mem_we = !MEM_nWR ;
 
 assign cpu_din = LED_CS   ? status[8:1] :
                  TMS_CS   ? vdp_dout   :
+					  PPI_CS   ? ppi_dout   :
                  UART1_CS ? uart1_dout :
   					  SD_CS    ? {sd_miso,7'b0}:
 					  mem_rd   ? mem_q:
@@ -618,9 +619,7 @@ psg ay8910
 	.mix    (mix    ),
 	.ioad   (io     )
 );
-///////////////////TMS9958/////////////////
-
-
+///////////////////TMS9958/////////////////////////////
 
 
 wire        vram_we,vram_rd;
@@ -661,6 +660,44 @@ f18a_core VDP (
     .scanlines_i(1'b0)
 );
 
+///////////////////TMS9958/////////////////////////////
+// Instanciado del componente jt8255
+
+wire [7:0] ppi_dout;
+wire [7:0] porta_din,porta_dout;
+wire [7:0] portb_din,portb_dout;
+wire [7:0] portc_din,portc_dout;
+
+    jt8255 jt8255_inst (
+        .rst(reset),
+        .clk(clk_sys),
+        .addr(cpu_a[1:0]),
+        .din(cpu_dout),
+        .dout(ppi_dout),
+        .rdn(nRD),
+        .wrn(nWR),
+        .csn(~PPI_CS),
+        .porta_din(8'h0),
+        .portb_din(kbd_dout),
+        .portc_din(8'h0),
+        .porta_dout(porta_dout),
+        .portb_dout(),
+        .portc_dout(portc_dout)
+    );
+
+wire [7:0] kbd_dout;
+
+keyboard keyboard
+(
+   .clk		  (clk_sys),
+	.reset	  (reset),
+   .key_strobe(key_strobe),
+   .key_pressed(key_pressed),
+   .key_extended(key_extended),
+   .key_code  (key_code),
+   .kb_row    (portc_dout[3:0]),
+   .kb_data   (kbd_dout)
+);
 
 ////////////////////   RAM/ROM   ///////////////////
 
@@ -821,7 +858,7 @@ mist_video #(.COLOR_DEPTH(4), .OUT_COLOR_DEPTH(VGA_BITS),.BIG_OSD(BIG_OSD)) mist
 
 wire [7:0] DEBUG;
 
-assign LED= sd_cs;
+assign LED= !key_strobe;
 `ifdef USE_EXTBUS
 always @(posedge clk_sys) begin
 	if(reset) begin
