@@ -76,7 +76,7 @@ entity vga is
 
       reset : in std_logic;                                          -- reset
       clk : in std_logic;                                            -- bus clock
-      clk50mhz : in std_logic                                        -- 50MHz input for vga signals
+      clk25mhz : in std_logic                                        -- 25MHz input for vga signals
    );
 end vga;
 
@@ -172,17 +172,17 @@ begin
    base_addr_match <= '1' when base_addr(17 downto 13) = bus_addr(17 downto 13) else '0';
    bus_addr_match <= base_addr_match;
 
-   process(clk50mhz)
-   begin
-      if clk50mhz = '1' and clk50mhz'event then
-         if reset = '1' then
-            vgaclk <= '0';
-         else
-            vgaclk <= not vgaclk;
-         end if;
-      end if;
-   end process;
-
+--   process(clk50mhz)
+--   begin
+--      if clk50mhz = '1' and clk50mhz'event then
+--         if reset = '1' then
+--            vgaclk <= '0';
+--         else
+--            vgaclk <= not vgaclk;
+--         end if;
+--      end if;
+--   end process;
+   vgaclk <= clk25mhz;
    charbuf_addr_match <= '1' when base_addr_match = '1' and bus_addr(12) = '0' else '0';
    process(clk)
    begin

@@ -378,6 +378,7 @@ component vt10x is
 -- clock & reset
       cpuclk : in std_logic;                                         -- cpuclk : should be around 10MHz, give or take a few
       clk50mhz : in std_logic;                                       -- clk50mhz : used for vga signal timing
+		clk25mhz : in std_logic;
       reset : in std_logic                                           -- reset
    );
 end component;

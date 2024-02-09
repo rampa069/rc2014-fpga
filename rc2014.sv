@@ -194,16 +194,13 @@ localparam CONF_STR = {
 	"P1O8,Device,Serial,CRT;",
 	`SEP
 	"P1T0,Reset;",
-`ifdef USE_EXTBUS	
 	"P2,Hardware options;",	
 	"P2O9,AY-3-8910,External,Internal;",
 	"P2OA,2nd ACIA,External,Internal;",
 	"P2OB,Z80 CTC,External,Internal;",	
 	`SEP
 	"P2T0,Reset;",
-`endif
 	`SEP
-	"OFG,Scandoubler Fx,None,CRT 25%,CRT 50%,CRT 75%;",
 	"T0,Reset;",
 	"V,v1.0.",`BUILD_DATE
 };
@@ -212,67 +209,49 @@ localparam CONF_STR = {
 wire clk_sys;
 wire clk_vt;
 wire clk_7;
-wire clk_vdp;
-wire clk_50;
+wire clk_25,clk_50,clk_100;
 wire locked;
 
 
-`ifdef USE_CLOCK_50
+
 pll pll
 (
+`ifdef USE_CLOCK_50
    .inclk0(CLOCK_50),
+`else
+   .inclk0(CLOCK_27),
+`endif	
 	.c0(clk_sys),
-	.c1(clk_vdp),
+	.c1(),
 	.c2(clk_7),
 	.locked(locked)
 );
 pll1 pll1
 (
+`ifdef USE_CLOCK_50
    .inclk0(CLOCK_50),
+`else
+   .inclk0(CLOCK_27),
+`endif
 	.c0(clk_vt),
 	.c1(clk_50),
-);
-`else
-pll pll
-(
-   .inclk0(CLOCK_27),
-	.c0(clk_sys),
-	.c1(clk_vt),
-	.c2(clk_7),
-	.locked(locked)
+	.c2(clk_100),
+	.c3(clk_25)
 );
 
-wire CLOCK_50;
-pll1 pll1
-(
-   .inclk0(CLOCK_27),
-	.c0(CLOCK_50)
-);
-
-`endif	
-
-
-
-
-reg ne14M;
 reg ne7M3, pe7M3;
-reg ne3M6, pe3M6;
 reg ne1M8, pe1M8;
-reg ne921K, pe921K;
 
-reg[5:0] ce = 1;
+reg[6:0] ce = 1;
+
 always @(negedge clk_sys) if(!reset) begin
 	ce <= ce+1'd1;
-	ne14M <= ~ce[0] & ~ce[1];
 	ne7M3 <= ~ce[0] & ~ce[1] & ~ce[2];
 	pe7M3 <= ~ce[0] & ~ce[1] &  ce[2];
-	ne3M6 <= ~ce[0] & ~ce[1] & ~ce[2] & ~ce[3];
-	pe3M6 <= ~ce[0] & ~ce[1] & ~ce[2] &  ce[3];
 	ne1M8 <= ~ce[0] & ~ce[1] & ~ce[2] & ~ce[3] & ~ce[4] ;
 	pe1M8 <= ~ce[0] & ~ce[1] & ~ce[2] & ~ce[3] &  ce[4];
-	ne921K <= ~ce[0] & ~ce[1] & ~ce[2] & ~ce[3] & ~ce[4] & ~ce[5];
-	pe921K <= ~ce[0] & ~ce[1] & ~ce[2] & ~ce[3] & ~ce[4] &  ce[5];
 end
+
 
 //////////////////   MIST ARM I/O   ///////////////////
 wire  [7:0] joystick_0;
@@ -418,9 +397,12 @@ wire txtx,rxrx;
 wire rtsrts,ctscts;
 wire ps2k_c,ps2k_d;
 
+wire vt_hsync;
+wire vt_vsync;
+
    vt10x vt10x (
-      .vga_hsync  (HSync),
-      .vga_vsync  (VSync),
+      .vga_hsync  (vt_hsync),
+      .vga_vsync  (vt_vsync),
       .vga_fb     (vga_fb),
       .vga_ht     (vga_ht),
 
@@ -443,7 +425,8 @@ wire ps2k_c,ps2k_d;
 		.bps(115200),
 
       .cpuclk (clk_vt),
-	   .clk50mhz (clk_50),
+	   .clk50mhz (clk_50), // BRG clock
+	   .clk25mhz (clk_25), // VGA clock
       .reset (reset)
    );
 
@@ -451,14 +434,11 @@ wire ps2k_c,ps2k_d;
 ////////////////////   COMPUTER   ///////////////////
 
 //////////// Internal devices //////////////
-`ifdef USE_EXTBUS
 wire psgInt        = status[9];
 wire aciaInt       = status[10];
 wire ctcInt        = status[11];
-`else
-wire psgInt        = 1'b1;
-wire aciaInt       = 1'b1;
-wire ctcInt        = 1'b1;
+
+`ifndef USE_EXTBUS
 wire [7:0] BUS_D   = 8'hff;
 `endif
 ////////////////////////////////////////////
@@ -657,92 +637,31 @@ wire [5:0] vdp_b;
 wire       vdp_hsync,vdp_vsync;
 wire       vdp_hblank,vdp_vblank;
 
-
+wire csw_n_i = !TMS_CS | nWR;
+wire csr_n_i = !TMS_CS | nRD;
 wire vdp_nINT;
-wire PVIDEODLCLK;
-wire PVIDEODHCLK;
 
-
-
-wire req = ~((nIORQ & nMREQ) | (nWR & nRD)| iack);
-vdp  TMS9958
-(
-	 .CLK21M  (clk_vdp),
-	 .RESET   (reset),
-	 .REQ     (req & TMS_CS),
-	 .ACK     (     ),
-	 .WRT     (~nWR),
-	 .ADR     (cpu_a),
-	 .INT_N   (vdp_nINT),
-	 .DBI     (vdp_tmp),
-	 .DBO     (cpu_dout),
-	 //
-	 .PRAMOE_N(vram_rd),
-	 .PRAMWE_N(vram_we),
-	 .PRAMADR (vram_a),
-	 .PRAMDBO (vram_d),
-	 .PRAMDBI ({vram_q_h,vram_q_l}),
-	 .PVIDEODHCLK(PVIDEODHCLK),
-	 .PVIDEODLCLK(PVIDEODLCLK),
-	 .VDPSPEEDMODE(1),
-    .CENTERYJK_R25_N(0),
-	 //
-	 .VDP_ID (5'b00000),
-	 //
-	 .DISPRESO(1),
-	 .PVIDEOR (vdp_r),
-	 .PVIDEOG (vdp_g),
-	 .PVIDEOB (vdp_b),
-	 .PVIDEOHS_N (vdp_hsync),
-	 .PVIDEOVS_N (vdp_vsync),
-    .HBLANK(vdp_hblank),
-    .VBLANK(vdp_vblank),
-	 .LEGACY_VGA(1),
-    .RATIOMODE(3'b000)
-
-
-	 );
-
-
-	 
-assign vram_we_l = ~vram_we & PVIDEODLCLK & ~vram_a[16];
-assign vram_we_h = ~vram_we & PVIDEODLCLK & vram_a[16];
-
-reg [7:0] latch_reg,vdp_tmp;
-
-always @(posedge clk_vdp) begin
-    latch_reg <= vdp_tmp;  // Latchea los datos de entrada en el flanco de subida del reloj del TMS
-    vdp_dout <= latch_reg;  // Propaga los datos latched hacia el Z80
-  end
-
-spram #(.addr_width(16),.mem_name("VDP1")) vram_lo
-(
-   .clock(clk_sys),
-   .address(vram_a),
-   .wren(vram_we_l),
-   .data(vram_d),
-   .q(vram_q_l)
+f18a_core VDP (
+    .clk_100m0_i(clk_100),
+    .clk_25m0_i(clk_25),
+    .reset_n_i(~reset),
+    .mode_i(cpu_a[0]),
+    .csw_n_i(csw_n_i),
+    .csr_n_i(csr_n_i),
+    .int_n_o(vdp_nINT),
+    .cd_i(cpu_dout),
+    .cd_o(vdp_dout),
+    .blank_o(),
+    .hsync_o(vdp_hsync),
+    .vsync_o(vdp_vsync),
+    .red_o(vdp_r),
+    .grn_o(vdp_g),
+    .blu_o(vdp_b),
+    .sprite_max_i(1'b0),
+    .scanlines_i(1'b0)
 );
-spram #(.addr_width(16),.mem_name("VDP2")) vram_hi
-(
-   .clock(clk_sys),
-   .address(vram_a),
-   .wren(vram_we_h),
-   .data(vram_d),
-   .q(vram_q_h)
-);
-	 
-logic iack;
-always @(posedge clk_sys) begin
-   if (reset) iack <= 0;
-   else begin
-      if (nIORQ  & nMREQ)
-         iack <= 0;
-      else
-         if (req)
-            iack <= 1;
-   end
-end
+
+
 ////////////////////   RAM/ROM   ///////////////////
 
 wire[19:0] mem_a;
@@ -854,14 +773,19 @@ wire HBlank,VBlank;
 wire [5:0] Rx,Gx,Bx;
 wire is_crt = status[8];
 
-assign Rx= is_crt? vdp_r : 6'b0;
-assign Gx= is_crt? vdp_g : vga_fb ? 6'b111111 : vga_ht? 6'b100000: 6'b000000;
-assign Bx= is_crt? vdp_b : 6'b0;
 
-mist_video #(.COLOR_DEPTH(6), .OUT_COLOR_DEPTH(VGA_BITS),.BIG_OSD(BIG_OSD)) mist_video (
+always @(posedge clk_sys) begin
+	Rx<= is_crt? vdp_r : 4'b0;
+	Gx<= is_crt? vdp_g : vga_fb ? 4'b1111 : vga_ht? 4'b1000: 4'b0000;
+	Bx<= is_crt? vdp_b : 4'b0;
+	HSync <= is_crt? vdp_hsync : vt_hsync;
+	VSync <= is_crt? vdp_vsync : vt_vsync;
+end
+
+mist_video #(.COLOR_DEPTH(4), .OUT_COLOR_DEPTH(VGA_BITS),.BIG_OSD(BIG_OSD)) mist_video (
 	
-   .clk_sys ( is_crt ? clk_vdp : clk_50),
-	//.clk_sys(clk_50),
+   //.clk_sys ( is_crt ? clk_25 : clk_50),
+	.clk_sys(clk_25),
 	// OSD SPI interface
 	.SPI_SCK     ( SPI_SCK    ),
 	.SPI_SS3     ( SPI_SS3    ),
@@ -872,7 +796,7 @@ mist_video #(.COLOR_DEPTH(6), .OUT_COLOR_DEPTH(VGA_BITS),.BIG_OSD(BIG_OSD)) mist
 	.ce_divider  ( 3'd1       ),
 
 	.scandoubler_disable ( 1'b1 ),
-	.no_csync    ( no_csync   ),
+	.no_csync    ( 1'b1       ),
 	.ypbpr       ( ypbpr      ),
 	.rotate      ( 2'b00      ),
 	.blend       ( 1'b0       ),
@@ -881,11 +805,9 @@ mist_video #(.COLOR_DEPTH(6), .OUT_COLOR_DEPTH(VGA_BITS),.BIG_OSD(BIG_OSD)) mist
 	.R           ( Rx ),
 	.G           ( Gx ),
 	.B           ( Bx ),
-
-	.HSync       ( is_crt? vdp_hsync : HSync      ),
-	.VSync       ( is_crt? vdp_vsync : VSync      ),
-	.HBlank      ( is_crt? vdp_hblank : 1'b0      ),
-	.VBlank      ( is_crt? vdp_vblank : 1'b0      ),
+ 
+   .HSync       (HSync),
+	.VSync       (VSync),
 
 	// MiST video output signals
 	.VGA_R       ( VGA_R      ),

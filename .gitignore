@@ -4,6 +4,7 @@ db/
 incremental_db/
 greybox_tmp/
 qmegawiz_errors_log.txt
+PLLJ_PLLSPE_INFO.txt
 *.bak
 *.ppf
 *.qws

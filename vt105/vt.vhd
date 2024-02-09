@@ -58,7 +58,8 @@ entity vt10x is
 
 -- clock & reset
       cpuclk : in std_logic;                                         -- cpuclk : should be around 10MHz, give or take a few
-      clk50mhz : in std_logic;                                       -- clk50mhz : used for vga signal timing
+      clk50mhz : in std_logic;                                       -- clk50mhz : used for baud rate generator
+      clk25mhz : in std_logic;                                       -- clk50mhz : used for pixel clock
       reset : in std_logic                                           -- reset
    );
 end vt10x;
@@ -138,7 +139,7 @@ component vga is
 
       reset : in std_logic;                                          -- reset
       clk : in std_logic;                                            -- bus clock
-      clk50mhz : in std_logic                                        -- 50MHz input for vga signals
+      clk25mhz : in std_logic                                        -- 25MHz input for vga signals
     );
 end component;
 
@@ -585,7 +586,7 @@ begin
       have_act => have_act,
 
       reset => reset,
-      clk50mhz => clk50mhz,
+		clk25mhz => clk25mhz,
       clk => nclk
    );
 
